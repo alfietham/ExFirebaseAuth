@@ -36,8 +36,7 @@ defmodule ExFirebaseAuth.Token do
   def verify_token(token_string) do
     issuer = issuer()
 
-    with {:jwtheader, %{fields: %{"kid" => kid}}} <-
-           {:jwtheader, JOSE.JWT.peek_protected(token_string)},
+    with {:jwtheader, %{fields: %{"kid" => kid}}} <- peek_token_kid(token_string),
          # read key from store
          {:key, %JOSE.JWK{} = key} <- {:key, get_public_key(kid)},
          # check if verify returns true and issuer matches
@@ -46,6 +45,9 @@ defmodule ExFirebaseAuth.Token do
          {:verify, {:ok, _}} <- {:verify, verify_expiry(exp)} do
       {:ok, sub, data}
     else
+      :invalidjwt ->
+        {:error, "Invalid JWT"}
+
       {:jwtheader, _} ->
         {:error, "Invalid JWT header, `kid` missing"}
 
@@ -64,6 +66,12 @@ defmodule ExFirebaseAuth.Token do
       {:verify, _} ->
         {:error, "None of public keys matched auth token's key ids"}
     end
+  end
+
+  defp peek_token_kid(token_string) do
+    {:jwtheader, JOSE.JWT.peek_protected(token_string)}
+  rescue
+    _ -> :invalidjwt
   end
 
   defp verify_expiry(exp) do
