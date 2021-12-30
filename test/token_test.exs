@@ -30,7 +30,9 @@ defmodule ExFirebaseAuth.TokenTest do
       Application.put_env(:ex_firebase_auth, :issuer, issuer)
 
       sub = Enum.random(?a..?z)
-      valid_token = Mock.generate_token(sub)
+      time_in_future = DateTime.utc_now() |> DateTime.add(360, :second) |> DateTime.to_unix()
+      claims = %{"exp" => time_in_future}
+      valid_token = Mock.generate_token(sub, claims)
       assert {:ok, ^sub, jwt} = Token.verify_token(valid_token)
 
       %JOSE.JWT{
@@ -142,5 +144,19 @@ defmodule ExFirebaseAuth.TokenTest do
       )
 
     assert {:error, "Signed by invalid issuer"} = Token.verify_token(token)
+  end
+
+  test "Does fail on expired JWT" do
+    issuer = Enum.random(?a..?z)
+    Application.put_env(:ex_firebase_auth, :issuer, issuer)
+
+    sub = Enum.random(?a..?z)
+
+    time_in_past = DateTime.utc_now() |> DateTime.add(-60, :second) |> DateTime.to_unix()
+    claims = %{"exp" => time_in_past}
+
+    valid_token = Mock.generate_token(sub, claims)
+
+    assert {:error, "Expired JWT"} = Token.verify_token(valid_token)
   end
 end

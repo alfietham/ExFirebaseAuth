@@ -41,8 +41,9 @@ defmodule ExFirebaseAuth.Token do
          # read key from store
          {:key, %JOSE.JWK{} = key} <- {:key, get_public_key(kid)},
          # check if verify returns true and issuer matches
-         {:verify, {true, %{fields: %{"iss" => ^issuer, "sub" => sub}} = data, _}} <-
-           {:verify, JOSE.JWT.verify(key, token_string)} do
+         {:verify, {true, %{fields: %{"iss" => ^issuer, "sub" => sub, "exp" => exp}} = data, _}} <-
+           {:verify, JOSE.JWT.verify(key, token_string)},
+         {:verify, {:ok, _}} <- {:verify, verify_expiry(exp)} do
       {:ok, sub, data}
     else
       {:jwtheader, _} ->
@@ -57,8 +58,18 @@ defmodule ExFirebaseAuth.Token do
       {:verify, {true, _, _}} ->
         {:error, "Signed by invalid issuer"}
 
+      {:verify, {:expired, _}} ->
+        {:error, "Expired JWT"}
+
       {:verify, _} ->
         {:error, "None of public keys matched auth token's key ids"}
+    end
+  end
+
+  defp verify_expiry(exp) do
+    cond do
+      exp > DateTime.utc_now() |> DateTime.to_unix() -> {:ok, exp}
+      true -> {:expired, exp}
     end
   end
 end
